@@ -157,9 +157,7 @@ export async function establishPayer(): Promise<void> {
     );
 
     // Calculate the cost of sending the transactions
-    fees += feeCalculator.lamportsPerSignature * 100; // wag
-
-    fees  = fees * 1000;
+    fees += feeCalculator.lamportsPerSignature ; // wag
 
     // Fund a new payer via airdrop
     payerAccount = await newAccountWithLamports(connection, fees);
@@ -242,7 +240,7 @@ export async function loadProgram(): Promise<void> {
   console.log('Creating account', greetedPubkey.toBase58(), 'to say hello to');
   let space = 28;
   console.log('space ',space.toString(), ' ****');
-  let lamports = 50000000;
+  let lamports = 2000;
   console.log('lamports ',lamports.toString(), ' ****');
   const transaction = new Transaction().add(
     SystemProgram.createAccount({
@@ -266,9 +264,11 @@ export async function loadProgram(): Promise<void> {
       treasuryAccount = new Account();
       treasuryPubkey = treasuryAccount.publicKey;
       console.log('Creating treasury account', treasuryPubkey.toBase58(), 'to say hello to');
-      space = 12;
+      space = MintLayout.span;
       console.log('space ', space.toString(), ' ****');
-      lamports = 100000000000;
+      lamports = await connection.getMinimumBalanceForRentExemption(
+        MintLayout.span
+      );
       console.log('lamports ', lamports.toString(), ' ****');
 
       const transaction2 = new Transaction().add(
@@ -300,10 +300,8 @@ export async function loadProgram(): Promise<void> {
         SystemProgram.createAccount({
           fromPubkey: payerAccount.publicKey,
           newAccountPubkey: liquidityTokenAccount.publicKey,
-          lamports: await connection.getMinimumBalanceForRentExemption(
-            MintLayout.span
-          ),
-          space: MintLayout.span,
+          lamports,
+          space,
           programId: TOKEN_PROGRAM_ID,
         })
       );
@@ -456,12 +454,11 @@ export async function sendDeposit(): Promise<void> {
     // let treasuryTokenAccount = new PublicKey("7XSR8M6sSLUXgTuV2xABKBiPXkePtWZGR1ywiTrbf7Po");
     // let userTokenAccountPubKey = new PublicKey("3p7MV6fekGGfAahLS6EHobw1TLEjQTQXoLU1wJdMxk3W");
 
-
     // Create new game fund account
     let transaction = new Transaction();
     let treasuryFundAccount = new Account();
     let treasuryFundAccountPubKey = treasuryFundAccount.publicKey;
-    let lamports = 1000;
+    let lamports = 1000000000;
     let space = 0;
     transaction.add(
         SystemProgram.createAccount({

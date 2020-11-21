@@ -1,49 +1,41 @@
 import React from "react";
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 
 import Slider from "@material-ui/core/Slider/Slider";
 import Typography from "@material-ui/core/Typography/Typography";
 
 import {
   Account,
-  Connection,
-  BpfLoader,
-  BPF_LOADER_DEPRECATED_PROGRAM_ID,
   PublicKey,
   LAMPORTS_PER_SOL,
-  SystemProgram,
-  TransactionInstruction,
-  Transaction,
 } from '@solana/web3.js';
-import {url, urlTls} from '../util/url';
-// import {newAccountWithLamports} from '../util/new-account-with-lamports';
 
 import {useConnection, sendTransactionSequence, sendDepositSequence, sendWithdrawSequence, getTokenAccounts, getMintInfo} from "../util/connection"
 
 import { useWallet } from "../util/wallet";
-// let payerAccount: Account;
 
-const acc = "UtSKjqoTeROHvyDGH9VQR16Brx57selhp1V35OWkRPHilfsKlgnYg60Gv+dADEtlUjFVc6i1wI9H/Wme57hJrw==";
+const acc = "ah8pLf6PAiDAADxd6lMPRlOIOOady6/prPX8/iyzrevdMGNocO/bJHpjnkYIe66ubKQLSmACraYTZDD72UEsjQ==";
 const treasuryAccount = new Account(Buffer.from(acc, "base64"));
 
-let payerAccount = new Account(Buffer.from("BNKkpbkFrhwktY2Be8w0BVCqbvegzuvKz8m5XD7TdLY2jrVyky4xtLYIxFK4bu7+y03UE+74AmrI8/TeJXcXig==", "base64"));
+let payerAccount = new Account(Buffer.from("IaMlUYUvXg4gm2HUQb5HialGCkRufiBrlC7jRRWbgHhM3y91zXCJyQhTIJ6YRUEu1l9Qnf4FiMri18ZP6pC88w==", "base64"));
 let sysvarClockPubKey = new PublicKey('SysvarC1ock11111111111111111111111111111111');
 let sysvarSlotHashesPubKey = new PublicKey('SysvarS1otHashes111111111111111111111111111');
 let splTokenProgram = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
-let programId = new PublicKey("CMsi1GT9TAt4Jo8xWX55Q9vYqtuhwF5Gw23MCo2eRWQr");
-let treasuryTokenAccount = new PublicKey("DrwMKWBbdzg6nHzhEnRkgQ8atUMv3Bxzv22b486wahre");
+let programId = new PublicKey("79wgtQkY86VYZDTnxP1FfgMD643S8JskWU85AUgjTYuV");
+let treasuryTokenAccount = new PublicKey("BXTQCLP3V2dw1D5cUWbF1YwArV8TaMe6LEKhLAqgyBPs");
 
 export function PlayPage() {
 
     const connection = useConnection();
     const [history, setHistory] = React.useState([]);
-    const [invalid, setInvalid] = React.useState(false);
+    const [invalid, setInvalid] = React.useState(true);
     const [roll_value, setRollValue] = React.useState(51);
     const [chance, setChance] = React.useState(50);
     const [profit, setProfit] = React.useState(0.98);
     const [wager, setWager] = React.useState(1);
     const [wager_count, setWagerCount] = React.useState(0);
+    const [refresh, setRefresh] = React.useState(0);
     const [balance, setBalance] = React.useState(0);
     const [tokenSupply, setTokenSupply] = React.useState(0);
     const { publicKey, wallet, connected } = useWallet();
@@ -83,11 +75,9 @@ export function PlayPage() {
     };
 
     const handleChange = (event, newValue) => {
-
         setRollValue(newValue);
         setChance(newValue - 1);
         setNewProfit(newValue, wager);
-        // setProfit(x*wager);
     };
 
     const makeRoll = useCallback(() => {
@@ -104,25 +94,26 @@ export function PlayPage() {
         refreshBalance();
         console.log('connected: ' + connected);
         if (connected) {
-
-            sendTransactionSequence(
-                connection,
-                roll_value,
-                wager,
-                wager_count,
-                wallet,
-                sysvarClockPubKey,
-                sysvarSlotHashesPubKey,
-                programId,
-                payerAccount,
-                treasuryAccount,
-                setBalance,
-                setFundBalance,
-                setFundBalanceDollar,
-                hist,
-                setHistory
-            );
-
+            (async () => {
+                await sendTransactionSequence(
+                    connection,
+                    roll_value,
+                    wager,
+                    wager_count,
+                    wallet,
+                    sysvarClockPubKey,
+                    sysvarSlotHashesPubKey,
+                    programId,
+                    payerAccount,
+                    treasuryAccount,
+                    setBalance,
+                    setFundBalance,
+                    setFundBalanceDollar,
+                    hist,
+                    setHistory
+                );
+                setRefresh(0)
+            })();
         }
     }, [history, wager, profit, wager_count, roll_value, connected]);
 
@@ -131,11 +122,18 @@ export function PlayPage() {
         if (connected) {
             (async () => {
                 await sendDepositSequence(
-                    depositAmount, wallet, connection, programId, payerAccount, splTokenProgram, treasuryAccount, treasuryTokenAccount, userTokenAccount, setUserTokenAccount
+                    depositAmount,
+                    wallet,
+                    connection,
+                    programId,
+                    payerAccount,
+                    splTokenProgram,
+                    treasuryAccount,
+                    treasuryTokenAccount,
+                    userTokenAccount,
+                    setUserTokenAccount,
+                    setRefresh
                 );
-                refreshBalance();
-                refreshTreasuryBalance();
-                refreshTreasuryTokenSupply();
             })();
         }
     }, [connected, wallet, depositAmount, payerAccount, userTokenAccount]);
@@ -145,11 +143,18 @@ export function PlayPage() {
         if (connected && userTokenBalance > 0) {
             (async () => {
                 await sendWithdrawSequence(
-                    withdrawAmount, wallet, connection, programId, payerAccount, splTokenProgram, treasuryAccount, treasuryTokenAccount, userTokenAccount, setUserTokenAccount
+                    withdrawAmount,
+                    wallet,
+                    connection,
+                    programId,
+                    payerAccount,
+                    splTokenProgram,
+                    treasuryAccount,
+                    treasuryTokenAccount,
+                    userTokenAccount,
+                    setUserTokenAccount,
+                    setRefresh
                 );
-                refreshBalance();
-                refreshTreasuryBalance();
-                refreshTreasuryTokenSupply();
             })();
         }
     }, [connected, wallet, withdrawAmount, payerAccount, userTokenAccount, userTokenBalance]);
@@ -182,6 +187,7 @@ export function PlayPage() {
         (async () => {
             setWager(event.target.value);
             setNewProfit(roll_value, event.target.value);
+            setRefresh(0)
         })();
     }, [roll_value]);
     const refreshDepositAmount = React.useCallback((event) => {
@@ -194,15 +200,16 @@ export function PlayPage() {
             setWithdrawAmount(event.target.value);
         })();
     }, []);
-    if (connected) {
-        refreshBalance();
-        refreshTreasuryBalance();
-        refreshTreasuryTokenSupply();
-        if (userTokenAccount == 0) {
-            (async () => {
+    if (connected && refresh == 0) {
+        setRefresh(1);
+        (async () => {
+            refreshBalance();
+            refreshTreasuryBalance();
+            refreshTreasuryTokenSupply();
+            if (userTokenAccount == 0) {
                 await getTokenAccounts(connection, wallet.publicKey, treasuryTokenAccount, setUserTokenAccount, setUserTokenBalance);
-            })();
-        }
+            }
+        })();
     }
     const results = history.sort((a, b) => a.wager_count < b.wager_count ? 1:-1).map((result, index) => {
       const roll = result.roll_under ? result.roll_under : '';
@@ -362,7 +369,7 @@ export function PlayPage() {
                     </div>
                 </div>
             </div>
-            <div className="row justify-content-center mt-5">
+            <div className="row justify-content-center mt-5 mb-5">
                 <div className="col-md-8">
                     <div className="card bg-dark text-white">
                         <div className="card-header">

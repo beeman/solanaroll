@@ -52,7 +52,7 @@ export const ENDPOINTS = [
   { name: "localnet" as ENV, endpoint: "http://127.0.0.1:8899" },
 ];
 
-const DEFAULT = ENDPOINTS[3].endpoint;
+const DEFAULT = ENDPOINTS[2].endpoint;
 const DEFAULT_SLIPPAGE = 0.25;
 
 interface ConnectionConfig {
@@ -259,9 +259,9 @@ export const sendDepositSequence = async (
   treasuryMint: PublicKey,
   userTokenAccount: any,
   setUserTokenAccount: any,
+  setRefresh: any,
 ) => {
 
-    console.log('Create user spl');
     let userTokenAccountPubkey;
 
     if (!userTokenAccount) {
@@ -272,7 +272,6 @@ export const sendDepositSequence = async (
         // Create new game fund account
         let tokenAccount = new Account();
         let tokenAccountPubkey = tokenAccount.publicKey;
-        console.log('Creating SPL TOKEN ACCOUNT!!!!!!    ', tokenAccountPubkey.toBase58(), 'to fund solanaroll');
         let transaction6 = new Transaction();
         transaction6.add(
             SystemProgram.createAccount({
@@ -284,14 +283,11 @@ export const sendDepositSequence = async (
             })
         );
 
-        console.log('creating account 1');
-        sendTransaction(connection, payerAccount, payerAccount, tokenAccount, null, transaction6, [], true);
-
         userTokenAccount = tokenAccount;
         userTokenAccountPubkey = userTokenAccount.publicKey;
 
-        let transaction7 = new Transaction();
-        transaction7.add(
+        // let transaction7 = new Transaction();
+        transaction6.add(
             Token.createInitAccountInstruction(
               TOKEN_PROGRAM_ID,
               treasuryMint,
@@ -299,32 +295,15 @@ export const sendDepositSequence = async (
               wallet.publicKey
             )
         );
-
-        console.log('creating spl token acc');
-
-        sendTransaction(connection, payerAccount, payerAccount, null, null, transaction7, [], true);
+        await sendTransaction(connection, payerAccount, payerAccount, tokenAccount, null, transaction6, [], true);
     } else {
-
-        console.log('getting saved public key');
-        console.log(userTokenAccount);
         userTokenAccountPubkey = new PublicKey(userTokenAccount);
     }
 
-    console.log('DONE - pub key:');
-    console.log(wallet.publicKey);
-    console.log(treasuryMint.toString());
-    console.log(userTokenAccountPubkey.toString());
-    console.log(TOKEN_PROGRAM_ID.toString());
-
-    // sendTransaction(connection, payerAccount, wallet, account,null, transaction7, [], true, false);
-    // await sendTransaction(connection, null, wallet, transaction7, account, [], [], false, true);
-
-    console.log('Sending deposit');
     // Create new game fund account
     let transaction = new Transaction();
     let treasuryFundAccount = new Account();
     let treasuryFundAccountPubKey = treasuryFundAccount.publicKey;
-    console.log('Creating new game fund account', treasuryFundAccountPubKey.toBase58(), 'to fund solanaroll');
     let lamports = 1000;
     let space = 0;
     transaction.add(
@@ -337,29 +316,22 @@ export const sendDepositSequence = async (
         })
     );
 
-    console.log("creating treasury fund account");
-    console.log('user sending funds');
-    sendTransaction(connection, payerAccount, payerAccount, treasuryFundAccount,null, transaction, [], true);
+    await sendTransaction(connection, payerAccount, payerAccount, treasuryFundAccount,null, transaction, [], true);
 
-    console.log("sending deposit");
+    await sleep(1000);
 
     // Send game funds
     let transaction3 = new Transaction();
-    console.log("Sending to game fund: ");
-    console.log(treasuryFundAccount.publicKey.toBase58());
     transaction3.add(SystemProgram.transfer({
         fromPubkey: wallet.publicKey,
         toPubkey: treasuryFundAccount.publicKey,
         lamports: amount * LAMPORTS_PER_SOL,
     }));
 
-    console.log('user sending funds');
     let id = await sendTransaction(connection, null, wallet, transaction3, null, [], [], false, true);
+    await sleep(1000);
 
-    console.log('sent funds');
-    console.log(id);
     // Send command 2
-    console.log('Sending command 2');
     const instruction = new TransactionInstruction({
         keys: [{pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
             {pubkey: treasuryFundAccount.publicKey, isSigner: true, isWritable: true},
@@ -371,18 +343,23 @@ export const sendDepositSequence = async (
         data: Buffer.from([2]),
     });
 
-    console.log(instruction);
-
     let transaction2 = new Transaction();
     transaction2.add(instruction);
-    console.log("sending deposit");
-    sendTransaction(connection, payerAccount, payerAccount, treasuryFundAccount,null, transaction2, [], true);
-    console.log("sent");
-
+    await sendTransaction(connection, payerAccount, payerAccount, treasuryFundAccount,null, transaction2, [], true);
     await sleep(1000);
-
     setUserTokenAccount(0);
+    setRefresh(0);
 
+};
+
+const longToByteArray = function(long: any) {
+    var byteArray = [0, 0, 0, 0, 0, 0, 0, 0];
+    for ( var index = 0; index < byteArray.length; index ++ ) {
+        var byte = long & 0xff;
+        byteArray [ index ] = byte;
+        long = (long - byte) / 256 ;
+    }
+    return byteArray;
 };
 
 export const sendWithdrawSequence = async (
@@ -396,36 +373,32 @@ export const sendWithdrawSequence = async (
   treasuryMint: PublicKey,
   userTokenAccount: any,
   setUserTokenAccount: any,
+  setRefresh: any
 ) => {
 
-    console.log('Create user spl');
-
-    console.log(userTokenAccount);
     let userTokenAccountPubkey = new PublicKey(userTokenAccount);
+
+    // Get amount in byte array for instruction data
+    const lamports = amount * LAMPORTS_PER_SOL;
+    const lamports_ba = longToByteArray(lamports);
 
     console.log('Sending withdraw');
     const instruction = new TransactionInstruction({
-        keys: [{pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
+        keys: [{pubkey: wallet.publicKey, isSigner: true, isWritable: true},
+            {pubkey: payerAccount.publicKey, isSigner: false, isWritable: false},
             {pubkey: treasuryMint, isSigner: false, isWritable: true},
             {pubkey: userTokenAccountPubkey, isSigner: false, isWritable: true},
             {pubkey: splTokenProgram, isSigner: false, isWritable: false},
-            {pubkey: treasuryAccount.publicKey, isSigner: false, isWritable: true},
-            {pubkey: wallet.publicKey, isSigner: false, isWritable: true}],
+            {pubkey: treasuryAccount.publicKey, isSigner: false, isWritable: true}],
         programId,
-        data: Buffer.from([3, amount]),
+        data: Buffer.from([3].concat(lamports_ba)),
     });
-
-    console.log(instruction);
-
     let transaction2 = new Transaction();
     transaction2.add(instruction);
-    sendTransaction(connection, payerAccount, payerAccount, null,null, transaction2, [], true);
-    console.log("sent");
-
-    await sleep(1000);
-
+    await sendTransaction(connection, null, wallet, transaction2,null, [], [], true, true);
+    await sleep(1500);
     setUserTokenAccount(0);
-
+    setRefresh(0);
 };
 
 export const getTokenAccounts = async (
@@ -437,23 +410,16 @@ export const getTokenAccounts = async (
 ) => {
     try {
         let balance = 0;
-        console.log('**********************************************    getting accounts for ' + owner.toString());
         const accounts = await connection.getTokenAccountsByOwner(owner, {
             mint: mint,
         });
-        console.log(accounts);
         for (let i = 0; i < accounts.value.length; i++) {
-            console.log(accounts.value[i]);
             const tmp_balance = await connection.getTokenAccountBalance(accounts.value[i].pubkey);
-            console.log('found balance ' + parseInt(tmp_balance.value.amount));
             balance += parseInt(tmp_balance.value.amount);
+            await sleep(100);
         }
-
-        console.log('FINAL ABALNCE IS ' + balance);
         if (accounts.value && accounts.value[0]) {
             setUserTokenAccount(accounts.value[0].pubkey.toString());
-            console.log('FINAL ACCOUNT IS ' + accounts.value[0].pubkey.toString());
-            console.log('SAVED 888888888888888888888888800000000000000000000');
         }
         setUserTokenBalance(balance);
     } catch (e) {
@@ -625,24 +591,10 @@ export const sendTransactionSequence = async (
     }
     await sleep(1600);
     try {
-      connection = new Connection(url, 'recent');
-      // const version = await connection.getVersion();
-      // console.log(version);
-      console.log(connection);
-      console.log(gameAccount.publicKey);
       let info = await getAccountInfo(connection, gameAccount.publicKey);
-      // console.log("GOT INFO! ---------------------");
-      // const accountInfo = await connection.getAccountInfo(
-      //     gameAccount.publicKey,
-      //     "singleGossip"
-      // );
-      //
-      // console.log(accountInfo);
-      // const info = Buffer.from(accountInfo.data);
 
         console.log("info is");
         console.log(info);
-      // const data = info.toJSON();
 
       const rolled = info.data.slice(20, 28);
       const rolled_result = Int64ToString(rolled, false);
