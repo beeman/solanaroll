@@ -8,6 +8,7 @@ import {
   establishConnection,
   establishPayer,
   loadProgram,
+  loadTestProgram,
   sendCommit,
   sendDeposit,
   createGameAccount,
@@ -23,6 +24,10 @@ async function main() {
   // Determine who pays for the fees
   await establishPayer();
 
+  // TEST PROGRAM
+  // await loadTestProgram();
+
+
   // Load the program if not already loaded
   await loadProgram();
 
@@ -30,8 +35,9 @@ async function main() {
 
   // Say hello to an account
   await sendDeposit();
-  // await sendCommit(0);
-  // await sendCommit(1);
+  //
+  // // await sendCommit(0);
+  // // await sendCommit(1);
 
   // Find out how many times that account has been greeted
   await reportHellos();

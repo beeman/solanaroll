@@ -1,7 +1,84 @@
+html {
+  height: 100%;
+}
+
 body {
-  font: 14px "Century Gothic", Futura, sans-serif;
-  background-color: #222222;
-  color: #d3d3d3;
+  width: 100%;
+  background-image: url("SolanaRoll_Background.svg");
+  background-color: black;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: right bottom;
+}
+
+nav {
+  height: 85px;
+}
+
+.nav-menu-sr {
+  z-index:999;
+  background-color: black;
+  padding: 5px;
+}
+
+.bg-transparent {
+  background-color: transparent;
+}
+
+.bg-half-transparent {
+  background-color: rgba(0,0,0,0.75);
+}
+
+.bg-black {
+  background-color: black;
+}
+
+.sr-border {
+  border: 1px solid;
+  border-image-slice: 1;
+  border-radius: 1em;
+  border-image-source: linear-gradient(to bottom left, #F71DF4, #02FFAD);
+}
+
+.text-sr {
+  font-size: 28px;
+  font-weight: 800;
+  background-image: linear-gradient(to top right, #F71DF4, #02FFAD);
+  color:transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.text-sr:hover {
+  text-decoration: none;
+  color: #02FFAD !important;
+  font-weight: 900;
+}
+
+.sr-nav-text-1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #02FFAD !important;
+}
+.sr-nav-text-2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #F71DF4 !important;
+}
+
+@media(max-width: 991px){
+  .sr-border-sm {
+    border: 1px solid;
+    border-image-slice: 1;
+    border-radius: 1em;
+    border-image-source: linear-gradient(to bottom left, #F71DF4, #02FFAD);
+  }
+}
+
+@media(max-width: 1201px){
+  body {
+    background-size: 1100px 600px;
+  }
 }
 
 .btn-dark-custom {

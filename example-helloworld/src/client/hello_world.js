@@ -7,6 +7,7 @@ import {
   Connection,
   BpfLoader,
   BPF_LOADER_DEPRECATED_PROGRAM_ID,
+  BPF_LOADER_PROGRAM_ID,
   PublicKey,
   LAMPORTS_PER_SOL,
   SystemProgram,
@@ -62,6 +63,7 @@ let gameFundPubkey: PublicKey;
 let treasuryPubkey: PublicKey;
 
 const pathToProgram = 'dist/program/helloworld.so';
+const pathToTestProgram = 'dist/program/testprogram.so';
 
 /**
  * Layout of the greeted account data
@@ -186,6 +188,50 @@ export async function establishPayer(): Promise<void> {
     payerSecretKey: payerSecretKey,
   });
 }
+
+/**
+ * Load the hello world BPF program if not already loaded
+ */
+export async function loadTestProgram(): Promise<void> {
+
+  // Load the program
+  console.log('Loading testing program...');
+  const data = await fs.readFile(pathToTestProgram);
+  programAccount = new Account();
+  await BpfLoader.load(
+      connection,
+      payerAccount,
+      programAccount,
+      data,
+      BPF_LOADER_PROGRAM_ID,
+  );
+  programId = programAccount.publicKey;
+  console.log('Program loaded to account', programId.toBase58());
+  let programAccountSecretKey = Buffer.from(programAccount.secretKey).toString("base64");
+  console.log('programAccountSecretKey ', programAccountSecretKey);
+
+  let sysvarSlotHashesPubKey = new PublicKey('SysvarS1otHashes111111111111111111111111111');
+  const instruction = new TransactionInstruction({
+        keys: [{pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
+            {pubkey: sysvarSlotHashesPubKey, isSigner: false, isWritable: false}],
+        programId,
+        data: Buffer.from([0]),
+    });
+
+  let instructions = new Transaction();
+  console.log('Sending test instruction');
+  instructions.add(instruction);
+  let tx = await sendAndConfirmTransaction(
+      'sendTest',
+      connection,
+      instructions,
+      payerAccount,
+  );
+
+  console.log(tx);
+  console.log('DONE');
+}
+
 
 /**
  * Load the hello world BPF program if not already loaded

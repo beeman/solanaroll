@@ -6,31 +6,50 @@ use solana_sdk::{
     entrypoint_deprecated,
     entrypoint_deprecated::ProgramResult,
     info,
+    hash::{Hash, HASH_BYTES},
     program_error::ProgramError,
     pubkey::Pubkey,
     sysvar::{
         clock::Clock, slot_hashes::SlotHashes, Sysvar,
     },
 };
+
+use std::convert::TryInto;
+
 use solana_sdk::program::invoke_signed;
 use spl_token::{instruction};
 use solana_sdk::program_pack::Pack as TokenPack;
 use spl_token::state::{Account as TokenAccount, Mint};
 
-use std::hash::{Hash, Hasher};
+use std::hash::{Hash as StdHash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 
 use num_derive::FromPrimitive;
 use solana_sdk::{decode_error::DecodeError};
 use thiserror::Error;
 
+
 fn hash_value<T>(obj: T) -> u64
 where
-    T: Hash,
+    T: StdHash,
 {
     let mut hasher = DefaultHasher::new();
     obj.hash(&mut hasher);
     hasher.finish()
+}
+
+const MAX_NUM_SLOT_HASHES: u64 = 512;
+fn get_slot_hash(data: &[u8], slot_height: u64) -> Hash {
+    let current_slot = u64::from_le_bytes(data[8..16].try_into().unwrap());
+    let diff = current_slot - slot_height;
+    if (diff > MAX_NUM_SLOT_HASHES) {
+        let mut buf = [0u8; HASH_BYTES];
+        return Hash::new(&buf);
+    } else {
+        let target_index = (16 + (diff * 40)) as usize;
+        let hash = &data[target_index..target_index + 32];
+        return Hash::new(hash);
+    }
 }
 
 /// Errors that may be returned by the TokenSwap program.
@@ -114,7 +133,7 @@ entrypoint_deprecated!(process_instruction);
 
 // Program entrypoint's implementation
 fn process_instruction(
-    program_id: &Pubkey, // Public key of the account the hello world program was loaded into
+    program_id: &Pubkey,
     accounts: &[AccountInfo],
     _instruction_data: &[u8],
 ) -> ProgramResult {
@@ -125,6 +144,7 @@ fn process_instruction(
 
     // Get command number
     let command_number = _instruction_data[0];
+
     // 0 - commit reveal_number_hash and under_number
     // 1 - get roll result, validate, compare, move balances
     // 2 - deposit - mint and accept funds
@@ -136,6 +156,12 @@ fn process_instruction(
 
         let payer_account = next_account_info(accounts_iter)?;
         let game_account = next_account_info(accounts_iter)?;
+
+        if game_account.owner != program_id {
+            info!("SolanaRoll game_account does not have the correct program id");
+            return Err(ProgramError::IncorrectProgramId);
+        }
+
         let mut data = game_account.try_borrow_mut_data()?;
         let sysvar_account = next_account_info(accounts_iter)?;
         let sysvar_slot_history = next_account_info(accounts_iter)?;
@@ -182,115 +208,106 @@ fn process_instruction(
             let saved_slot = BigEndian::read_u64(&data[12..20]);
             if saved_slot < current_slot {
 
-//                info!("SlotHashes identifier:");
-//                info!("2");
-//                let slot_hashes = SlotHashes::from_account_info(&sysvar_slot_history).expect("slot_hashes");
+                // Get slot height of saved transaction
+                let slot_hashes_data = sysvar_slot_history.try_borrow_data()?;
+                let slot_hash = get_slot_hash(&slot_hashes_data, saved_slot);
 
-//                info!("3");
-//                info!("SlotHashes length:");
-//                assert!(slot_hashes.len() >= 1);
-//                info!("4");
-//                let (x, y) = sh[0];
-//                let slot = saved_slot as Slot;
-//                sh.iter().map(|x| info!(&x.1.to_string()));
-//                let x = sh.get(&slot).unwrap().to_string();
-
-//                let x = slot_hashes.len().to_string();
-//                info!("LENGTH:");
-//                let ss: &str = &x;
-//                info!(ss);
-
-//                let stuff_str = sh.get(&saved_slot).iter().next();
-//                let stuff_str: String = sh.get(&saved_slot).iter().map(|x| x.to_string()).collect();
-//                let ss: &str = &stuff_str;
-//                info!(ss);
-
-                // TODO: get block hash of command 0 slot height instead of saved_slot
-                let block_hashed_slot = hash_value(saved_slot);
-                info!("Block height valid");
-                let val = hash_value(hashed_reveal+block_hashed_slot);
-                let result = (val % 100) + 1;
-                let s: String = result.to_string();
-                let ss: &str = &s;
-
-                // Save result
-                BigEndian::write_u64(&mut data[20..28], result);
-
-                let under_number_32 = BigEndian::read_u32(&data[0..4]);
-                let under_number_64 = under_number_32 as u64;
-
-                let un: String = under_number_64.to_string();
-                let uns: &str = &un;
-
-                info!("Rolling for a number under:");
-                info!(uns);
-                info!("You rolled a:");
-                info!(ss);
-
-                info!("    Fund account balance:");
-                let fab: String = fund_account_balance.to_string();
-                let sfab: &str = &fab;
-                info!(sfab);
-
-                if fund_account_balance <= 1000 {
-                    info!("Fund Account is Too Low!");
-                    return Err(ProgramError::MissingRequiredSignature);
-                }
-
-                // Get the treasury balance - stop if not > 0
-                let treasury_account_balance = treasury_account.lamports();
-
-                // TODO: confirm program owns treasury/fund accs
-
-                let sub_under_number_64 = under_number_64 - 1;
-                let num = 100 - sub_under_number_64;
-                let tmp = ((num as f64 / sub_under_number_64 as f64 ) as f64 + (1 as f64)) as f64;
-                let house = (990 as f64 / 1000 as f64) as f64;
-                let winning_ratio = ((tmp * house) - (1 as f64)) as f64;
-                let fund_account_balance_f = fund_account_balance as f64;
-                let winnings = (fund_account_balance_f * winning_ratio) as u64;
-
-                let winnings_str: String = winnings.to_string();
-                let swinnings_str: &str = &winnings_str;
-                info!("Potential winnings:");
-                info!(swinnings_str);
-
-                // TODO: max profit configurable
-                let treasury_max_profit_f64 = treasury_account_balance as f64 * 0.01;
-                let treasury_max_profit = treasury_max_profit_f64 as u64;
-                let treasury_max_profit_str: String = treasury_max_profit.to_string();
-                let streasury_max_profit_str: &str = &treasury_max_profit_str;
-                info!("Treasury max profit:");
-                info!(streasury_max_profit_str);
-
-                if winnings > treasury_max_profit {
+                // Couldn't find slot_height in recent slots, invalid
+                let mut buf = [0u8; HASH_BYTES];
+                if slot_hash == Hash::new(&buf) {
                     **fund_account.lamports.borrow_mut() -= fund_account_balance;
                     **user_account.lamports.borrow_mut() += fund_account_balance;
-                    info!("Potential profit exceeds max profit allowed");
+                    info!("Block hash invalid, returning funds");
                 } else {
-                    if result >= under_number_64 {
-                        info!("You LOSE! Funds go to treasury");
-                        **fund_account.lamports.borrow_mut() -= fund_account_balance;
-                        **treasury_account.lamports.borrow_mut() += fund_account_balance;
-                        let lose: String = fund_account_balance.to_string();
-                        let slose: &str = &lose;
-                        info!(slose);
-                    } else {
-                        info!("You WIN! Funds go to user");
-                        **fund_account.lamports.borrow_mut() -= fund_account_balance;
-                        let win: String = winnings.to_string();
-                        let swin: &str = &win;
-                        info!(swin);
 
-                        if winnings < treasury_account_balance {
-                            **treasury_account.lamports.borrow_mut() -= winnings;
-                            **user_account.lamports.borrow_mut() += fund_account_balance + winnings;
+                    info!("Block height and hash valid, obtaining result");
+
+                    let hashed_slot_hash = hash_value(slot_hash);
+                    let val = hash_value(hashed_reveal + hashed_slot_hash);
+                    let result = (val % 100) + 1;
+                    let s: String = result.to_string();
+                    let ss: &str = &s;
+
+                    // Save result
+                    BigEndian::write_u64(&mut data[20..28], result);
+
+                    let under_number_32 = BigEndian::read_u32(&data[0..4]);
+                    let under_number_64 = under_number_32 as u64;
+
+                    let un: String = under_number_64.to_string();
+                    let uns: &str = &un;
+
+                    info!("Rolling for a number under:");
+                    info!(uns);
+                    info!("You rolled a:");
+                    info!(ss);
+
+                    info!("    Fund account balance:");
+                    let fab: String = fund_account_balance.to_string();
+                    let sfab: &str = &fab;
+                    info!(sfab);
+
+                    if fund_account_balance <= 1000 {
+                        info!("Fund Account is Too Low!");
+                        return Err(ProgramError::MissingRequiredSignature);
+                    }
+
+                    // Get the treasury balance - stop if not > 0
+                    let treasury_account_balance = treasury_account.lamports();
+
+                    // TODO: confirm program owns treasury/fund accs
+
+                    let sub_under_number_64 = under_number_64 - 1;
+                    let num = 100 - sub_under_number_64;
+                    let tmp = ((num as f64 / sub_under_number_64 as f64 ) as f64 + (1 as f64)) as f64;
+                    let house = (990 as f64 / 1000 as f64) as f64;
+                    let winning_ratio = ((tmp * house) - (1 as f64)) as f64;
+                    let fund_account_balance_f = fund_account_balance as f64;
+                    let winnings = (fund_account_balance_f * winning_ratio) as u64;
+
+                    let winnings_str: String = winnings.to_string();
+                    let swinnings_str: &str = &winnings_str;
+                    info!("Potential winnings:");
+                    info!(swinnings_str);
+
+                    // TODO: max profit configurable
+                    let treasury_max_profit_f64 = treasury_account_balance as f64 * 0.01;
+                    let treasury_max_profit = treasury_max_profit_f64 as u64;
+                    let treasury_max_profit_str: String = treasury_max_profit.to_string();
+                    let streasury_max_profit_str: &str = &treasury_max_profit_str;
+                    info!("Treasury max profit:");
+                    info!(streasury_max_profit_str);
+
+                    if winnings > treasury_max_profit {
+                        **fund_account.lamports.borrow_mut() -= fund_account_balance;
+                        **user_account.lamports.borrow_mut() += fund_account_balance;
+                        info!("Potential profit exceeds max profit allowed");
+                    } else {
+                        if result >= under_number_64 {
+                            info!("You LOSE! Funds go to treasury");
+                            **fund_account.lamports.borrow_mut() -= fund_account_balance;
+                            **treasury_account.lamports.borrow_mut() += fund_account_balance;
+                            let lose: String = fund_account_balance.to_string();
+                            let slose: &str = &lose;
+                            info!(slose);
                         } else {
-                            **user_account.lamports.borrow_mut() += fund_account_balance;
-                            info!("Treasury not enough for payout, returning funds");
+                            info!("You WIN! Funds go to user");
+                            **fund_account.lamports.borrow_mut() -= fund_account_balance;
+                            let win: String = winnings.to_string();
+                            let swin: &str = &win;
+                            info!(swin);
+
+                            if winnings < treasury_account_balance {
+                                **treasury_account.lamports.borrow_mut() -= winnings;
+                                **user_account.lamports.borrow_mut() += fund_account_balance + winnings;
+                            } else {
+                                **user_account.lamports.borrow_mut() += fund_account_balance;
+                                info!("Treasury not enough for payout, returning funds");
+                            }
                         }
                     }
                 }
+
             } else {
                 **fund_account.lamports.borrow_mut() -= fund_account_balance;
                 **user_account.lamports.borrow_mut() += fund_account_balance;
