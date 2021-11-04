@@ -52,7 +52,7 @@ export function Header () {
         <div className="container">
             <nav className="navbar navbar-dark navbar-expand-lg bg-transparent">
                 <div className="navbar-brand">
-                    <a className=" d-inline-block align-top text-sr" href="https://www.solanaroll.com">SOLANA<i>ROLL</i></a>
+                    <a className=" d-inline-block align-top text-sr" href="https://www.solanaroll.com">Oneeye<i>King</i></a>
                 </div>
                 <button className="navbar-toggler bg-dark" type="button" data-toggle="collapse" data-target="#navbarText"
                         aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
